@@ -20,6 +20,7 @@ logging.basicConfig(format='%(levelname)s:%(message)s',
 log = logging.getLogger(__name__)
 # Logging level may be overridden by configuration 
 
+import os
 import socket    # Basic TCP/IP communication on the internet
 import _thread   # Response computation runs concurrently with main program
 
@@ -83,6 +84,8 @@ def respond(sock):
     This server responds only to GET requests (not PUT, POST, or UPDATE).
     Any valid GET request is answered with an ascii graphic of a cat.
     """
+    pages = os.path.abspath(get_options().DOCROOT)
+
     sent = 0
     request = sock.recv(1024)  # We accept only short requests
     request = str(request, encoding='utf-8', errors='strict')
@@ -90,9 +93,23 @@ def respond(sock):
     log.info("Request was {}\n***\n".format(request))
 
     parts = request.split()
-    if len(parts) > 1 and parts[0] == "GET":
-        transmit(STATUS_OK, sock)
-        transmit(CAT, sock)
+    parts[1] = parts[1].lstrip('/')
+    ext = parts[1].split('.')[-1]
+
+    if ".." in parts[1] or "~" in parts[1]:
+        transmit(STATUS_FORBIDDEN, sock)
+        transmit("\n%s is Forbidden.\n" % parts[1], sock)
+        return
+
+    if len(parts) > 1 and parts[0] == "GET" and (ext in ['html', 'css']):
+        req_path = os.path.join(pages, parts[1])
+        if os.path.exists(req_path):
+            with open(req_path, 'r') as rp:
+                transmit(STATUS_OK, sock)
+                transmit(rp.read(), sock)
+        else:
+            transmit(STATUS_NOT_FOUND, sock)
+            transmit("\n%s Not Found.\n" % parts[1], sock)
     else:
         log.info("Unhandled request: {}".format(request))
         transmit(STATUS_NOT_IMPLEMENTED, sock)
