@@ -92,28 +92,41 @@ def respond(sock):
     log.info("--- Received request ----")
     log.info("Request was {}\n***\n".format(request))
 
+    transmitted = False
     parts = request.split()
-    parts[1] = parts[1].lstrip('/')
-    ext = parts[1].split('.')[-1]
+    path = parts[1]
 
-    if ".." in parts[1] or "~" in parts[1]:
-        transmit(STATUS_FORBIDDEN, sock)
-        transmit("\n%s is Forbidden.\n" % parts[1], sock)
-        return
-
-    if len(parts) > 1 and parts[0] == "GET" and (ext in ['html', 'css']):
-        req_path = os.path.join(pages, parts[1])
-        if os.path.exists(req_path):
-            with open(req_path, 'r') as rp:
-                transmit(STATUS_OK, sock)
-                transmit(rp.read(), sock)
-        else:
-            transmit(STATUS_NOT_FOUND, sock)
-            transmit("\n%s Not Found.\n" % parts[1], sock)
+    if path == '/':
+        transmit(STATUS_OK, sock)
+        transmit(CAT, sock)
+        transmitted = True
     else:
-        log.info("Unhandled request: {}".format(request))
-        transmit(STATUS_NOT_IMPLEMENTED, sock)
-        transmit("\nI don't handle this request: {}\n".format(request), sock)
+        path = path.lstrip('/')
+
+    if not transmitted:
+        ext = path.split('.')[-1]
+        if ".." in path or "~" in path:
+            transmit(STATUS_FORBIDDEN, sock)
+            transmit("\n%s is Forbidden.\n" % path, sock)
+            transmit(CAT, sock)
+            transmitted = True
+
+        if not transmitted and ext not in ['html', 'css']:
+            transmit(STATUS_NOT_IMPLEMENTED, sock)
+            transmit("This server only serves files with html and css extensions.\n", sock)
+            transmit(CAT, sock)
+            transmitted = True
+
+        if not transmitted and len(parts) > 1 and parts[0] == "GET":
+            req_path = os.path.join(pages, path)
+            if os.path.exists(req_path):
+                with open(req_path, 'r') as rp:
+                    transmit(STATUS_OK, sock)
+                    transmit(rp.read(), sock)
+            else:
+                transmit(STATUS_NOT_FOUND, sock)
+                transmit("\n%s Not Found.\n" % parts[1], sock)
+                transmit(CAT, sock)
 
     sock.shutdown(socket.SHUT_RDWR)
     sock.close()
